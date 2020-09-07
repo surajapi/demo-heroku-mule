@@ -51,7 +51,7 @@ else
 fi
 
 # Register new Mule Runtime with ARM
-./bin/amc_setup -H $amcToken "${HEROKU_APP_NAME}_${DYNO}"
+./bin/amc_setup -H $amcToken "herpku-mule-server"
 
 # Get Server ID from AMC
 #echo "Getting server details from $hybridAPI/servers..."
