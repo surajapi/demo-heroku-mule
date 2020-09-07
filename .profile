@@ -79,7 +79,6 @@ else
   #echo "Creating new group and add server"
   #createGroup=$(curl -s -X "POST" $hybridAPI/serverGroups -H "X-ANYPNT-ENV-ID:$envId" -H "X-ANYPNT-ORG-ID:$orgId" -H "Authorization:Bearer $accessToken" -H "Content-Type: application/json" -d "{ \"name\": \"$serverGroupName\", \"serverIds\": [$serverId]}")    
 fi  
-
 # TODO: Setup Anypoint Monitoring
 # Note: 3/20/2020 - Currently not supported on Heroku Dyno
 # Get Server ID from AMC
