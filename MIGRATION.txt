@@ -1,0 +1,30 @@
+MIGRATION GUIDE
+===============
+
+Migration changes from 4.2.x to 4.3
+MULE-16681: Updated cipher suites for FIPS140-2 mode (check tls-fips140-2.conf file)
+MULE-15596: Added support to Error Handler for "when" filtering for a certain "type". Before 4.3.0 Setting "when" and "type" simple ignores "when" expression
+MULE-17800: ParseTemplateProcessor Type Inconsistencies when setting target and target variable
+MULE-17472: Use of backslash before Properties escapes the evaluation of them. To have the same behavior as before (backslash being a simple character) add the system property `mule.properties.correct.backslash.use=false`
+
+Migration changes from 4.1.x to 4.2
+MULE-15586: `lookup` function in DataWeave now has a timeout. The timeout for a specific lookup call may be increased by providing the new value with a third parameter (i.e.: lookup(vars.flow, payload, 10000).
+MULE-15730: TLS keystore entries must now reference at least one key to use or reference a key alias. Using an invalid keystore will result in an initialisation failure.
+MULE-14203: In `scheduler-pools.conf` some default values for the file have changed. Please apply these changes if this config file is being carried over from a previous version:
+ * `org.mule.runtime.scheduler.io.workQueue.size` from `1024` to `0`
+ * `org.mule.runtime.scheduler.cpuIntensive.workQueue.size` from `1024` to `2 * cores`
+
+Migration changes from 4.1.3 to 4.1.4
+MULE-14148: HTTP wire logging now depends on the server/client names to allow more fine grained logging.
+For example, given an HTTP listener config named "A" and an HTTP request config named "B", "HttpMessageLogger.A" will show only the listener data while "HttpMessageLogger.http.requester.B" will only show the requester data.
+This means log lines will also feature the server/client naming convention.
+
+Migration changes from 4.1.2 to 4.1.3
+MULE-15167: a new property "mule.deploy.applications" was added to deploy specific applications on startup time. Old command line option "-app" is still functional but deprecated.
+
+Migration changes from 4.1.1 to 4.1.2
+MULE-14910: logged event ID will not be formatted anymore. Replace "%X{correlationId}" by "[event: %X{correlationId}]" in log config files to keep behavior.
+MULE-14962: increased default value for fixed-frequency component to 1 minute. Add 'frequency="1000"' to keep behavior (e.g. '<fixed-frequency frequency="1000"/>').
+
+For a guide on how to migrate from Mule Runtime Enterprise Edition 3.x to 4.x, please refer to our documentation:
+https://docs.mulesoft.com

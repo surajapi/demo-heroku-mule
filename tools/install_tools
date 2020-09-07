@@ -1,0 +1,76 @@
+#!/bin/bash
+
+# (c) 2003-2020 MuleSoft, Inc. This software is protected under international copyright
+# law. All use of this software is subject to MuleSoft's Master Subscription Agreement
+# (or other master license agreement) separately entered into in writing between you and
+# MuleSoft. If such an agreement is not in place, you may not use the software.
+
+umask 0077
+
+# Get the fully qualified path to the script
+case $0 in
+    /*)
+        SCRIPT="$0"
+        ;;
+    *)
+        PWD=`pwd`
+        SCRIPT="$PWD/$0"
+        ;;
+esac
+
+# Resolve the true real path without any sym links.
+CHANGED=true
+while [ "X$CHANGED" != "X" ]
+do
+    # Change spaces to ":" so the tokens can be parsed.
+    SAFESCRIPT=`echo $SCRIPT | sed -e 's; ;:;g'`
+    # Get the real path to this script, resolving any symbolic links
+    TOKENS=`echo $SAFESCRIPT | sed -e 's;/; ;g'`
+    REALPATH=
+    for C in $TOKENS; do
+        # Change any ":" in the token back to a space.
+        C=`echo $C | sed -e 's;:; ;g'`
+        REALPATH="$REALPATH/$C"
+        # If REALPATH is a sym link, resolve it.  Loop for nested links.
+        while [ -h "$REALPATH" ] ; do
+            LS="`ls -ld "$REALPATH"`"
+            LINK="`expr "$LS" : '.*-> \(.*\)$'`"
+            if expr "$LINK" : '/.*' > /dev/null; then
+                # LINK is absolute.
+                REALPATH="$LINK"
+            else
+                # LINK is relative.
+                REALPATH="`dirname "$REALPATH"`""/$LINK"
+            fi
+        done
+    done
+
+    if [ "$REALPATH" = "$SCRIPT" ]
+    then
+        CHANGED=""
+    else
+        SCRIPT="$REALPATH"
+    fi
+done
+
+# Save the startup directory
+STARTUP_DIR=`pwd`
+
+# Change the current directory to the location of the script
+cd "`dirname "$REALPATH"`"
+REALDIR=`pwd`
+
+# REALDIR points to bin now, strip off the bin part so
+# we get a the base directory
+BASE_DIR="`dirname "${REALDIR}"`"
+
+if [ ! -d "$BASE_DIR/tools" ]
+then
+    mkdir "$BASE_DIR/tools"
+fi
+
+if [ -f "$BASE_DIR/bin/support-tools-installer-1.0.0-final.jar" ]
+then
+    mv "$BASE_DIR/bin/support-tools-installer-1.0.0-final.jar" "$BASE_DIR/tools"
+fi
+java -DagentVersion=1.0.0 -jar "$BASE_DIR/tools/support-tools-installer-1.0.0-final.jar" $*

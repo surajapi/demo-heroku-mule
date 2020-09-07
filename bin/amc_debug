@@ -1,0 +1,241 @@
+#!/bin/bash
+
+umask 0077
+
+echo ">> Mule Agent Debugger - STARTED <<"
+
+# Tasks:
+# ======
+# - Discover mule/agent JVM process
+# - Extract Thread dump (not forced if possible)
+# - Extract Heap dump
+# - Extract machine generic data: Java version, CPU usage, Memory usage, Disk usage.
+# - Copy all logs
+# - Copy properties files
+# - ZIP/RAR all
+
+function usage() {
+    echo "Usage: ./amc_debug [OPTION]"
+    echo " Available options:"
+    echo " -help|-h                 Show this help."
+    echo " -heap                    Extract heap along with the normal data extraction."
+
+    exit 1
+}
+
+function getMulePID() {
+  pids=($(jps | grep Mule | awk '{print $1}'))
+
+  for pid in $pids
+  do
+      # Check a value was extracted
+      if [ ! -n "${pid+1}" ]
+        then
+          echo "Could not discover Mule PIDs."
+          exit 1
+      fi
+
+      # Check the extracted value is a number
+      re='^[0-9]+$'
+      if ! [[ $pid =~ $re ]]
+        then
+          echo "Error discovering the Mule PIDs."
+          exit 1
+      fi
+      echo -ne "..."
+  done
+}
+
+function getMulePath() {
+  paths=()
+  for pid in "${pids[@]}"
+  do
+    path="$(ps -ef | grep $pid | grep mule.home | awk '{print $9}' | grep -o '/.*')"
+
+    if [ ! -n "${path+1}" ]
+    then
+        echo "Warning: Mule path could not be found."
+    else
+      paths+=($path)
+    fi
+
+    echo -ne "..."
+  done
+}
+
+function getThreadDump() {
+  for pid in "${pids[@]}"
+  do
+    jstack $pid >> "$pid"_"$time"_threadump.log
+    echo -ne "..."
+  done
+}
+
+function getHeapDump() {
+  for pid in "${pids[@]}"
+  do
+    jmap -dump:file="$pid"_"$time"_heap.dump $pid >/dev/null 2>&1
+    echo -ne "..."
+  done
+}
+
+function getGCStats() {
+  for pid in "${pids[@]}"
+  do
+    jmap -heap $pid >> "$pid"_"$time"_heapstats.log
+    echo -ne "..."
+  done
+}
+
+function getJVMStats() {
+  for pid in "${pids[@]}"
+  do
+    jcmd $pid PerfCounter.print >> "$pid"_"$time"_javastats.log
+    echo -ne "..."
+  done
+}
+
+function getMachineStats() {
+  echo "Discovered Mules:" >> "$time"_stats.log
+  echo "=================" >> "$time"_stats.log
+  echo "" >> "$time"_stats.log
+  for i in "${!pids[@]}"
+  do
+    echo "Mule PID: ${pids[$i]}" >> "$time"_stats.log
+    echo "Mule location: ${paths[$i]}" >> "$time"_stats.log
+    echo "---------"  >> "$time"_stats.log
+  done
+
+  echo "" >> "$time"_stats.log
+  echo "OS:"    >> "$time"_stats.log
+  uname -a      >> "$time"_stats.log
+
+  echo "" >> "$time"_stats.log
+  echo "DISK:"  >> "$time"_stats.log
+  df -h         >> "$time"_stats.log
+
+  echo "" >> "$time"_stats.log
+  echo "Cores:"     >> "$time"_stats.log
+  sysctl -n hw.ncpu >> "$time"_stats.log
+
+  echo "" >> "$time"_stats.log
+  echo "Anypoint Endpoints output:"      >> "$time"_stats.log
+  echo "USA:"      >> "$time"_stats.log
+  echo "# Command: nc -zv {HOSTNAME} 443" >> "$time"_stats.log
+  nc -zv anypoint.mulesoft.com 443  >> "$time"_stats.log 2>&1
+  nc -zv mule-manager.anypoint.mulesoft.com 443  >> "$time"_stats.log 2>&1
+  nc -zv analytics-ingest.anypoint.mulesoft.com 443  >> "$time"_stats.log 2>&1
+  nc -zv arm-auth-proxy.prod.cloudhub.io 443  >> "$time"_stats.log 2>&1
+  echo "" >> "$time"_stats.log
+  echo "# Command: nslookup {HOSTNAME}" >> "$time"_stats.log
+  nslookup mule-manager.anypoint.mulesoft.com >> "$time"_stats.log 2>&1
+  echo "" >> "$time"_stats.log
+  echo "# Command: openssl s_client -connect {HOSTNAME} {PORT}" >> "$time"_stats.log 2>&1
+  openssl s_client -connect mule-manager.anypoint.mulesoft.com:443 >> "$time"_stats.log 2>&1
+
+  echo "" >> "$time"_stats.log
+  echo "" >> "$time"_stats.log
+  echo "EU:"      >> "$time"_stats.log
+  echo "# Command: nc -zv $HOSTNAME 443" >> "$time"_stats.log
+  nc -zv eu1.anypoint.mulesoft.com 443  >> "$time"_stats.log 2>&1
+  nc -zv mule-manager.eu1.anypoint.mulesoft.com 443  >> "$time"_stats.log 2>&1
+  nc -zv analytics-ingest.eu1.anypoint.mulesoft.com 443  >> "$time"_stats.log 2>&1
+  nc -zv arm-auth-proxy.prod-eu.cloudhub.io 443  >> "$time"_stats.log 2>&1
+  echo "" >> "$time"_stats.log
+  echo "# Command: nslookup $HOSTNAME" >> "$time"_stats.log
+  nslookup mule-manager.eu1.anypoint.mulesoft.com >> "$time"_stats.log 2>&1
+  echo "" >> "$time"_stats.log
+  echo "# Command: openssl s_client -connect {HOSTNAME} {PORT}" >> "$time"_stats.log 2>&1
+  openssl s_client -connect mule-manager.eu1.anypoint.mulesoft.com:443 >> "$time"_stats.log 2>&1
+
+  echo -ne "..."
+}
+
+function getAgentLogs() {
+  for i in "${!pids[@]}"
+  do
+    if [ -n "${paths[$i]+1}" ]
+    then
+      zip -r "${pids[$i]}"_"$time"_mule_logs.zip ${paths[$i]}/logs/* >/dev/null 2>&1
+    fi
+    echo -ne "..."
+  done
+}
+
+function getAgentConfig() {
+  for i in "${!pids[@]}"
+  do
+   if [ -n "${paths[$i]+1}" ]
+     then
+       zip -r "${pids[$i]}"_"$time"_mule_config.zip ${paths[$i]}/conf/* >/dev/null 2>&1
+   fi
+   echo -ne "..."
+  done
+}
+
+function parseInput() {
+    while :; do
+      case $1 in
+        -heap)
+          EXTRACT_HEAP=true
+          shift
+          ;;
+        -help|-h|-\?)
+          usage
+          ;;
+        *)
+          break
+      esac
+      shift
+    done
+
+    if [ "$EXTRACT_HEAP" = true ] ; then
+        echo "WARN: Extract heap activated, this task may use a lot of disk."
+    fi
+    if [ -n "$MULE_PATH" ] ; then
+        echo "INFO: Mule path defined as: $MULE_PATH"
+    fi
+}
+
+function main() {
+    # Time the extraction of data started
+    time=$(date +"%Y%m%d%H%M")
+
+    parseInput $@
+
+    # Create folder for all data
+    mkdir troubleshoot_$time
+    cd troubleshoot_$time
+
+    # Get machine and network stats
+    getMachineStats
+
+    # Get mule data
+    getMulePID
+    getMulePath
+
+    # Java Stats
+    getThreadDump
+    getGCStats
+    getJVMStats
+    if [ "$EXTRACT_HEAP" = true ] ; then
+        getHeapDump
+    fi
+
+    getAgentLogs
+    getAgentConfig
+
+    # Go to the above folder and cleanup
+    cd ..
+    zip -r snapshot_$time.zip troubleshoot_$time/* >/dev/null 2>&1
+    rm -rf troubleshoot_$time
+
+    echo ""
+    echo "Created File: snapshot_$time.zip"
+    echo ">> Mule Agent debugger - FINISHED <<"
+    echo "Thank you, have a nice day."
+}
+
+main $@
+
+
